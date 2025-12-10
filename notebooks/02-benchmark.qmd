@@ -11,12 +11,16 @@ Load the libraries and source the functions.
 library(tidyverse)
 library(bench)
 library(furrr)
+library(Rcpp)
 library(here)
 
 source(here("R", "ap_naive.R"))
 source(here("R", "ap_v1.R"))
 source(here("R", "ap_v2.R"))
 source(here("R", "ap_v3.R"))
+Rcpp::sourceCpp(here("R", "ap_v3_rcpp.cpp"))
+source(here("R", "ap_v3_rcpp.R"))
+source(here("R", "ap_v3_rcpp_par.R"))
 ```
 
 
@@ -48,7 +52,6 @@ Read the option parameters sample:
 ```{r}
 option_parameters <- readRDS(here("data", "processed", "option_parameters.rds"))
 ```
-
 
 Computation time for calculating the option values for all 2500 options in our sample using the naive R implementation:
 ```{r}
@@ -235,4 +238,111 @@ identical(
 
 
 ## Using Rcpp
+
+The Rcpp package allows us to write C++ code that can be called from R, providing significant performance improvements for computationally intensive tasks like the binomial tree algorithm.
+
+### Single Option Benchmark
+
+Let's compare the performance of `ap_v3` (pure R) with `ap_v3_rcpp` (C++ core with R wrapper):
+
+```{r}
+bench_result_rcpp <- bench::mark(
+  ap_v3(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_rcpp(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  min_iterations = 10L
+)
+
+bench_result_rcpp
+```
+
+Verify that both implementations produce identical results:
+
+```{r}
+stopifnot(all.equal(
+  ap_v3(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_rcpp(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep)
+))
+```
+
+### Benchmark on Full Dataset
+
+Now let's test the Rcpp implementation on the full dataset of 2,500 options:
+
+```{r}
+bench::system_time({
+  option_values_rcpp <- option_parameters |>
+    mutate(
+      option_value = pmap_dbl(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3_rcpp,
+        .progress = TRUE
+      )
+    )
+})
+```
+
+Verify correctness - all implementations should produce identical results:
+
+```{r}
+stopifnot(all.equal(
+  option_values_v3$option_value,
+  option_values_rcpp$option_value,
+  tolerance = 1e-15
+))
+```
+
+
+We can also parallelize the Rcpp implementation using the parallel-safe wrapper.
+Since the Rcpp function creates an external pointer to another object in C++, we can only use it in R session where it was created. So we need to modify the R wrapper function to create the external pointer inside the function. This is what the `ap_v3_rcpp_par` is doing.
+
+
+We first create a safe version of the Rcpp function:
+```{r}
+ap_v3_rcpp_par_safe <- safely(ap_v3_rcpp_par)
+```
+
+```{r}
+plan(multisession, workers = 8)
+bench::system_time({
+  option_values_rcpp_par <- option_parameters |>
+    mutate(
+      option_value = future_pmap(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3_rcpp_par_safe,
+        .progress = TRUE,
+        .options = furrr_options(seed = TRUE)
+      )
+    ) |>
+    unnest_wider(option_value, names_sep = "_")
+})
+plan(sequential)
+
+stopifnot(all(is.na(option_values_rcpp_par$option_value_error)))
+```
+
+Verify correctness of parallel implementation:
+```{r}
+stopifnot(all.equal(
+  option_values_v3$option_value,
+  option_values_rcpp_par$option_value_result,
+  tolerance = 1e-15
+))
+```
+
 
