@@ -1,0 +1,37 @@
+---
+title: "Create a options sample parameters dataset"
+author: "Nelson Areal"
+date: 2025-12-10
+format: html
+---
+
+```{r}
+library(tibble)
+library(here)
+```
+
+Create a 2500 sample of options parameters to test the binomial tree algorithms.
+
+Sample volatility ($\sigma$) is distributed uniformly between 0.1 and 0.6, time-to-maturity ($T$) is uniform between 0.1 and 1.0 year with probability 0.75, and uniform between 1.0 and 5.0 years with probability 0.25. The asset price ($S_0$) follows a uniform distribution between 70 and 130. The dividend rate ($q$) is uniform between 0.0 and 0.1. The riskless interest rate ($r$) is uniform between 0.0 and 0.1, with probability 0.8, and with probability 0.2 equal to 0.0. Because only the ratio between asset price and exercise price ($K$) is of interest, since relative errors do not change if $S$ and $K$ are scaled by the same factor, the exercise price is fixed to 100.0.
+
+```{r}
+set.seed(42)
+n <- 2500
+
+option_parameters <- tibble(
+  option_set = 1:n,
+  volatility = runif(n, 0.1, 0.6),
+  time_to_maturity = ifelse(
+    runif(n) < 0.75,
+    runif(n, 0.1, 1.0),
+    runif(n, 1.0, 5.0)
+  ),
+  asset_price = runif(n, 70, 130),
+  dividend_rate = runif(n, 0.0, 0.1),
+  riskless_rate = ifelse(runif(n) < 0.8, runif(n, 0.0, 0.1), 0.0),
+  exercise_price = rep(100.0, n)
+)
+
+saveRDS(option_parameters, here("data", "processed", "option_parameters.rds"))
+```
+
