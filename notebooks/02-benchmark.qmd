@@ -1,0 +1,238 @@
+---
+title: "Benchmarking American Put option pricing algorithms"
+author: "Nelson Areal"
+date: 2025-12-10
+format: html
+---
+
+Load the libraries and source the functions.
+
+```{r}
+library(tidyverse)
+library(bench)
+library(furrr)
+library(here)
+
+source(here("R", "ap_naive.R"))
+source(here("R", "ap_v1.R"))
+source(here("R", "ap_v2.R"))
+source(here("R", "ap_v3.R"))
+```
+
+
+```{r}
+s <- 40
+k <- 40
+v <- 0.30
+r <- 0.08
+tt <- 0.25
+d <- 0
+nstep <- 1000
+
+bench_result <- bench::mark(
+  ap_naive(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v1(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v2(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  min_iterations = 10L
+)
+
+bench_result
+```
+
+
+
+## Compute option values for all options in the sample
+
+Read the option parameters sample:
+```{r}
+option_parameters <- readRDS(here("data", "processed", "option_parameters.rds"))
+```
+
+
+Computation time for calculating the option values for all 2500 options in our sample using the naive R implementation:
+```{r}
+bench::system_time({
+  option_values_naive <- option_parameters |>
+    mutate(
+      option_value = pmap_dbl(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_naive,
+        .progress = TRUE
+      )
+    )
+})
+```
+
+And using the most efficient R implementation (version 3):
+```{r}
+bench::system_time({
+  option_values_v3 <- option_parameters |>
+    mutate(
+      option_value = pmap_dbl(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3,
+        .progress = TRUE
+      )
+    )
+})
+```
+
+
+## Parallel implementation
+
+Let's create new versions of the functions to capture any errors. 
+
+```{r}
+ap_naive_safe <- safely(ap_naive)
+ap_v1_safe <- safely(ap_v1)
+ap_v2_safe <- safely(ap_v2)
+ap_v3_safe <- safely(ap_v3)
+```
+
+We can easily parellize the results using the `furrr` package:
+```{r}
+plan(multisession, workers = 10)
+bench::system_time({
+  option_values_v3_par <- option_parameters |>
+    mutate(
+      option_value = future_pmap(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3_safe,
+        .progress = TRUE
+      )
+    ) |>
+    unnest_wider(option_value, names_sep = "_")
+})
+plan(sequential)
+
+stopifnot(all(is.na(option_values_v3_par$option_value_error)))
+```
+
+We can do the same for version 2 of the algorithm:
+```{r}
+plan(multisession, workers = 10)
+bench::system_time({
+  option_values_v2_par <- option_parameters |>
+    mutate(
+      option_value = future_pmap(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v2_safe,
+        .progress = TRUE
+      )
+    ) |>
+    unnest_wider(option_value, names_sep = "_")
+})
+plan(sequential)
+
+stopifnot(all(is.na(option_values_v2_par$option_value_error)))
+```
+
+We can do the same for version 1 of the algorithm:
+```{r}
+plan(multisession, workers = 10)
+bench::system_time({
+  option_values_v1_par <- option_parameters |>
+    mutate(
+      option_value = future_pmap(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v1_safe,
+        .progress = TRUE
+      )
+    ) |>
+    unnest_wider(option_value, names_sep = "_")
+})
+plan(sequential)
+
+stopifnot(all(is.na(option_values_v1_par$option_value_error)))
+```
+
+And finally, we can do the same for the naive implementation of the algorithm:
+```{r}
+plan(multisession, workers = 10)
+bench::system_time({
+  option_values_naive_par <- option_parameters |>
+    mutate(
+      option_value = future_pmap(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_naive_safe,
+        .progress = TRUE
+      )
+    ) |>
+    unnest_wider(option_value, names_sep = "_")
+})
+plan(sequential)
+
+stopifnot(all(is.na(option_values_naive_par$option_value_error)))
+```
+
+
+The results are identical across all implementations:
+```{r}
+identical(
+  option_values_naive_par,
+  option_values_v1_par
+)
+
+identical(
+  option_values_v1_par,
+  option_values_v2_par
+)
+
+identical(
+  option_values_v2_par,
+  option_values_v3_par
+)
+```
+
+
+## Using Rcpp
+
