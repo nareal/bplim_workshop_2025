@@ -103,13 +103,30 @@ ap_v3_rcpp_par <- function(S0, K, r, q, tt, sigma, steps) {
     ))
   }
 
-  # Check if C++ function is available in this process
-  # If not, compile it (this happens once per parallel worker)
-  if (!exists("ap_v3_cpp", mode = "function")) {
-    # Suppress compilation messages to avoid cluttering parallel output
-    suppressMessages({
-      Rcpp::sourceCpp(here::here("R", "ap_v3_rcpp.cpp"))
+  # Check if C++ function needs to be compiled in this worker process
+  # Use an option to track compilation state per R session (worker)
+  if (is.null(getOption("ap_v3_cpp_compiled"))) {
+    # Get absolute path to C++ file
+    cpp_file <- here::here("R", "ap_v3_rcpp.cpp")
+
+    # Verify file exists
+    if (!file.exists(cpp_file)) {
+      stop(sprintf("C++ source file not found: %s", cpp_file))
+    }
+
+    # Compile C++ source in this worker
+    tryCatch({
+      Rcpp::sourceCpp(cpp_file)
+      # Mark as compiled in this session
+      options(ap_v3_cpp_compiled = TRUE)
+    }, error = function(e) {
+      stop(sprintf("Failed to compile C++ source in worker: %s", e$message))
     })
+  }
+
+  # Verify the function is available
+  if (!exists("ap_v3_cpp", mode = "function")) {
+    stop("C++ function ap_v3_cpp not found after compilation")
   }
 
   # Call C++ implementation
