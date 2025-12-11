@@ -21,8 +21,11 @@ source(here("R", "ap_v3.R"))
 Rcpp::sourceCpp(here("R", "ap_v3_rcpp.cpp"))
 source(here("R", "ap_v3_rcpp.R"))
 source(here("R", "ap_v3_rcpp_par.R"))
+source(here("R", "ap_v3_julia.R"))
 ```
 
+
+## Benchmark single option pricing with different R implementations
 
 ```{r}
 s <- 40
@@ -33,7 +36,7 @@ tt <- 0.25
 d <- 0
 nstep <- 1000
 
-bench_result <- bench::mark(
+bench_result_one_option_r <- bench::mark(
   ap_naive(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
   ap_v1(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
   ap_v2(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
@@ -41,9 +44,8 @@ bench_result <- bench::mark(
   min_iterations = 10L
 )
 
-bench_result
+bench_result_one_option_r
 ```
-
 
 
 ## Compute option values for all options in the sample
@@ -55,7 +57,7 @@ option_parameters <- readRDS(here("data", "processed", "option_parameters.rds"))
 
 Computation time for calculating the option values for all 2500 options in our sample using the naive R implementation:
 ```{r}
-bench::system_time({
+r_naive_time_all_options <- bench::system_time({
   option_values_naive <- option_parameters |>
     mutate(
       option_value = pmap_dbl(
@@ -73,11 +75,13 @@ bench::system_time({
       )
     )
 })
+
+r_naive_time_all_options
 ```
 
 And using the most efficient R implementation (version 3):
 ```{r}
-bench::system_time({
+r_v3_time_all_options <- bench::system_time({
   option_values_v3 <- option_parameters |>
     mutate(
       option_value = pmap_dbl(
@@ -95,6 +99,8 @@ bench::system_time({
       )
     )
 })
+
+r_v3_time_all_options
 ```
 
 
@@ -112,7 +118,7 @@ ap_v3_safe <- safely(ap_v3)
 We can easily parellize the results using the `furrr` package:
 ```{r}
 plan(multisession, workers = 10)
-bench::system_time({
+r_v3_par_time_all_options <- bench::system_time({
   option_values_v3_par <- option_parameters |>
     mutate(
       option_value = future_pmap(
@@ -131,6 +137,7 @@ bench::system_time({
     ) |>
     unnest_wider(option_value, names_sep = "_")
 })
+r_v3_par_time_all_options
 plan(sequential)
 
 stopifnot(all(is.na(option_values_v3_par$option_value_error)))
@@ -139,7 +146,7 @@ stopifnot(all(is.na(option_values_v3_par$option_value_error)))
 We can do the same for version 2 of the algorithm:
 ```{r}
 plan(multisession, workers = 10)
-bench::system_time({
+r_v2_par_time_all_options <- bench::system_time({
   option_values_v2_par <- option_parameters |>
     mutate(
       option_value = future_pmap(
@@ -158,6 +165,7 @@ bench::system_time({
     ) |>
     unnest_wider(option_value, names_sep = "_")
 })
+r_v2_par_time_all_options
 plan(sequential)
 
 stopifnot(all(is.na(option_values_v2_par$option_value_error)))
@@ -166,7 +174,7 @@ stopifnot(all(is.na(option_values_v2_par$option_value_error)))
 We can do the same for version 1 of the algorithm:
 ```{r}
 plan(multisession, workers = 10)
-bench::system_time({
+r_v1_par_time_all_options <- bench::system_time({
   option_values_v1_par <- option_parameters |>
     mutate(
       option_value = future_pmap(
@@ -185,6 +193,7 @@ bench::system_time({
     ) |>
     unnest_wider(option_value, names_sep = "_")
 })
+r_v1_par_time_all_options
 plan(sequential)
 
 stopifnot(all(is.na(option_values_v1_par$option_value_error)))
@@ -193,7 +202,7 @@ stopifnot(all(is.na(option_values_v1_par$option_value_error)))
 And finally, we can do the same for the naive implementation of the algorithm:
 ```{r}
 plan(multisession, workers = 10)
-bench::system_time({
+r_naive_par_time_all_options <- bench::system_time({
   option_values_naive_par <- option_parameters |>
     mutate(
       option_value = future_pmap(
@@ -212,6 +221,7 @@ bench::system_time({
     ) |>
     unnest_wider(option_value, names_sep = "_")
 })
+r_naive_par_time_all_options
 plan(sequential)
 
 stopifnot(all(is.na(option_values_naive_par$option_value_error)))
@@ -246,13 +256,13 @@ The Rcpp package allows us to write C++ code that can be called from R, providin
 Let's compare the performance of `ap_v3` (pure R) with `ap_v3_rcpp` (C++ core with R wrapper):
 
 ```{r}
-bench_result_rcpp <- bench::mark(
+bench_result_one_option_rcpp <- bench::mark(
   ap_v3(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
   ap_v3_rcpp(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
   min_iterations = 10L
 )
 
-bench_result_rcpp
+bench_result_one_option_rcpp
 ```
 
 Verify that both implementations produce identical results:
@@ -264,12 +274,12 @@ stopifnot(all.equal(
 ))
 ```
 
-### Benchmark on Full Dataset
+### Benchmark on full dataset
 
 Now let's test the Rcpp implementation on the full dataset of 2,500 options:
 
 ```{r}
-bench::system_time({
+rcpp_v3_time_all_options <- bench::system_time({
   option_values_rcpp <- option_parameters |>
     mutate(
       option_value = pmap_dbl(
@@ -287,6 +297,8 @@ bench::system_time({
       )
     )
 })
+
+rcpp_v3_time_all_options
 ```
 
 Verify correctness - all implementations should produce identical results:
@@ -311,7 +323,7 @@ ap_v3_rcpp_par_safe <- safely(ap_v3_rcpp_par)
 
 ```{r}
 plan(multisession, workers = 8)
-bench::system_time({
+rcpp_v3_par_time_all_options <- bench::system_time({
   option_values_rcpp_par <- option_parameters |>
     mutate(
       option_value = future_pmap(
@@ -331,6 +343,7 @@ bench::system_time({
     ) |>
     unnest_wider(option_value, names_sep = "_")
 })
+rcpp_v3_par_time_all_options
 plan(sequential)
 
 stopifnot(all(is.na(option_values_rcpp_par$option_value_error)))
@@ -346,3 +359,149 @@ stopifnot(all.equal(
 ```
 
 
+## Using Julia
+
+We can use [JuliaCall: an R package for seamless integration between R and Julia](https://joss.theoj.org/papers/10.21105/joss.01284) package to call Julia code from R.
+
+The function `init_julia_ap` from te file `ap_v3_julia.R` initializes the Julia environment and loads the Julia implementation of the American put option pricing algorithm.
+```{r}
+init_julia_ap()
+```
+
+We can now compare the performance of `ap_v3` (pure R) with `ap_v3_julia` (Julia core with R wrapper):
+
+### Single Option Benchmark
+
+```{r}
+bench_result_one_option_julia <- bench::mark(
+  ap_v3(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_rcpp(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_julia(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  min_iterations = 10L
+)
+
+bench_result_one_option_julia
+```
+
+Verify that both implementations produce identical results:
+
+```{r}
+stopifnot(all.equal(
+  ap_v3(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_julia(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep)
+))
+```
+
+
+### Benchmark on Full Dataset
+
+Now let's test the Rcpp implementation on the full dataset of 2,500 options:
+
+```{r}
+julia_v3_time_all_options <- bench::system_time({
+  option_values_julia <- option_parameters |>
+    mutate(
+      option_value = pmap_dbl(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3_julia,
+        .progress = TRUE
+      )
+    )
+})
+
+julia_v3_time_all_options
+```
+
+Verify correctness - all implementations should produce identical results:
+
+```{r}
+stopifnot(all.equal(
+  option_values_v3$option_value,
+  option_values_julia$option_value,
+  tolerance = 1e-13
+))
+```
+
+We can also parallelize the Julia implementation using the parallel-safe wrapper.
+Since the Julia function creates an external pointer to another object in Julia, we can only use it in R session where it was created. So we need to use the `ap_v3_julia_auto` function initializes Julia if necessary and calls the option valuation function in Julia.
+
+We first create a safe version of this Julia function:
+```{r}
+ap_v3_julia_auto_safe <- safely(ap_v3_julia_auto)
+```
+
+```{r}
+plan(multisession, workers = 8)
+julia_v3_par_time_all_options <- bench::system_time({
+  option_values_julia_par <- option_parameters |>
+    mutate(
+      option_value = future_pmap(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3_julia_auto_safe,
+        .progress = TRUE,
+        .options = furrr_options(seed = TRUE)
+      )
+    ) |>
+    unnest_wider(option_value, names_sep = "_")
+})
+julia_v3_par_time_all_options
+plan(sequential)
+
+stopifnot(all(is.na(option_values_julia_par$option_value_error)))
+```
+
+Verify correctness of parallel implementation:
+```{r}
+stopifnot(all.equal(
+  option_values_v3$option_value,
+  option_values_julia_par$option_value_result,
+  tolerance = 1e-13
+))
+```
+
+
+## Using torch
+
+
+
+
+
+
+
+
+## Saving all the benchmark times
+
+```{r}
+save(
+  bench_result_one_option_r,
+  r_naive_time_all_options,
+  r_v3_time_all_options,
+  r_v3_par_time_all_options,
+  r_v2_par_time_all_options,
+  r_v1_par_time_all_options,
+  r_naive_par_time_all_options,
+  bench_result_one_option_rcpp,
+  rcpp_v3_time_all_options,
+  rcpp_v3_par_time_all_options,
+  bench_result_one_option_julia,
+  julia_v3_time_all_options,
+  julia_v3_par_time_all_options,
+  file = here("data", "processed", "benchmark_results.RData")
+)
+```
