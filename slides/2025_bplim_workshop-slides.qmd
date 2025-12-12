@@ -7,7 +7,7 @@ format:
     slide-number: true
     show-slide-number: all
     controls: true
-    # embed-resources: true
+    embed-resources: true
     css:
       - css/extra.css
 author:
@@ -1095,6 +1095,7 @@ They are only equal up to [**4 significant digits**]{.alert} due to differences 
 ## Summary
 
 :::{.large}
+
 ```{r}
 tibble(
   approach = c("Naive R", "V3 R", "V3 R parallel", "V3 Rcpp parallel", "V3 Rcpp parallel (package)", "V3 Julia (parallelization in R)", "V3 Julia (parallelization in Julia)"),
@@ -1114,6 +1115,7 @@ tibble(
   ) |> 
     gt()
 ```
+
 :::
 
 
