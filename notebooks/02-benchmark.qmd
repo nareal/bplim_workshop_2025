@@ -15,6 +15,8 @@ format:
 Load the libraries and source the functions.
 
 ```{r}
+#| echo: true
+#| message: false
 library(tidyverse)
 library(bench)
 library(furrr)
