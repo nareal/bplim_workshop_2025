@@ -1,0 +1,1123 @@
+---
+title: Parallel and Cross-Language Computing
+subtitle: A Hands-On Workshop for Empirical Researchers
+format: 
+  clean-revealjs:
+    logo: images/EEG_bw.png
+    slide-number: true
+    show-slide-number: all
+    controls: true
+    # embed-resources: true
+    css:
+      - css/extra.css
+author:
+  - name: Nelson Areal
+    orcid: 0000-0002-1157-0178
+    email: nareal@eeg.uminho.pt
+    affiliations: NIPE/University of Minho
+  - name: Miguel Portela
+    orcid: 0000-0002-4721-2081
+    email: miguel.portela@eeg.uminho.pt
+    affiliations: NIPE/University of Minho/Banco de Portugal
+date: last-modified
+filters:
+  #- tachyons
+  - diagram
+diagram:
+  engine:
+    tikz:
+      execpath: xelatex
+      header-includes:
+        - '\usepackage{adjustbox}'
+        - '\usetikzlibrary{matrix,positioning}'
+        - '\tikzset{bullet/.style={circle,fill,inner sep=2pt}}'
+        - '\renewcommand{\familydefault}{\sfdefault}'
+---
+
+```{r}
+#| echo: false
+#| message: false
+library(tidyverse)
+library(bench)
+library(gt)
+library(here)
+option_parameters <- readRDS(here("data", "processed", "option_parameters.rds"))
+load(here("data", "processed", "benchmark_results.RData"))
+```
+
+
+## Plan for the session 
+
+Discuss some strategies to optimize code performance:
+
+- Optimize the algorithm  
+- Use parallel computing  
+- Use a lower-level language (C++, Julia, etc.)  
+- Use the GPU  
+
+We are going to illustrate these strategies using two examples.
+
+
+## Some initial thoughs on optimization
+
+> "*Programmers waste enormous amounts of time thinking about, or worrying about, the speed of noncritical parts of their programs, and these attempts at efficiency actually have a strong negative impact when debugging and maintenance are considered. We should forget about small efficiencies, say about 97% of the time: **premature optimization is the root of all evil.** [**Yet we should not pass up our opportunities in that critical 3%**]{.alert}.*"
+
+[Knuth, D. E. (1974). Structured programming with go to statements. ACM Computing Surveys (CSUR), 6(4), 261-301.]{.small}
+
+
+## Ready made tools
+
+For most data manipulation tasks, there are already great alternatives:
+
+- [Apache Arrow](https://arrow.apache.org/)
+- [Polars](https://pola.rs/)
+- [DuckDB](https://duckdb.org/)
+- [Apache Spark™](https://spark.apache.org/)
+
+These tools are optimized for performance and can handle large datasets efficiently.
+
+There is no need to reinvent the wheel.
+
+
+## How to identify bottlenecks?
+
+Use **profiling tools** to identify bottlenecks in your code, in R consider using the  [profvis](https://profvis.r-lib.org/) package.
+
+And then focus on optimizing the parts of the code that are most time-consuming.
+
+The strategies we are going to discuss can be applied if the bottleneck is not yet programmed in an optimized way or in parallel.
+
+
+## Two illustrations
+
+We are going to illustrate some of the strategies using two examples:
+
+- American option valuation
+- High-dimensional fixed effect models
+
+
+
+# Valuing an american option {background-color="#A1BC98"}
+
+
+## Option valuation with binomial trees 
+
+We need the following parameters to value an option using a binomial tree:
+
+- Current underlying asset price: $S_0$
+- Strike price: $K$
+- Time to maturity: $T$ in years
+- Risk-free interest rate: $r$ continuously compounded
+- Dividend yield: $q$ continuously compounded
+- Volatility of the underlying asset: $\sigma$
+- Number of time steps in the binomial tree: $N$
+- Type of option: Call or Put
+
+We are going to assume an **American put option** for this example.
+
+
+## Option valuation with binomial trees
+
+Once we have the parameters, we can proceed to build the binomial tree and value the option.
+
+We need will be using the CRR (Cox-Ross-Rubinstein) parameters:
+
+- $u = e^{\sigma\sqrt{\Delta t}}$
+- $d = e^{-\sigma\sqrt{\Delta t}}$
+- $\Delta t = \frac{T}{N}$
+- $p = \frac{e^{(r - q) \Delta t} - d}{u - d}$
+
+
+## Option valuation with binomial trees
+
+Now we need to follow these steps:
+
+1. Build the underlying asset price tree
+2. Calculate the option values at each node, starting from maturity and working backwards to the present.
+3. Determine the option price at the initial node.
+
+
+
+## Option valuation with binomial trees
+### Build the underlying asset price tree
+
+:::{.tc}
+```{.tikz}
+\begin{tikzpicture}[>=stealth,sloped,font=\sffamily,every node/.style={scale=4}]
+    \matrix (tree) [%
+      matrix of nodes,
+      minimum size=1cm,
+      column sep=4cm,
+      row sep=1.5cm,nodes={text width=22em}
+          ]
+    {
+          &   &  {\LARGE $S_0uu$} \\
+          & \; &   \\
+     {\LARGE $S_0$} &   &  {\LARGE $S_0ud$} \\
+          & \; &   \\
+          &   &  {\LARGE $S_0dd$} \\
+    };
+    \node[bullet,left=-8mm of tree-3-1.west](b-3-1){};
+    \node[bullet,left=3.14mm of tree-2-2.west,label=above:{\LARGE $S_0u$}](b-2-2){};
+    \node[bullet,left=3.14mm of tree-4-2.west,label=above:{\LARGE $S_0d$}](b-4-2){};
+    \node[bullet,left=3.14mm of tree-1-3.west](b-1-3){};
+    \node[bullet,left=3.14mm of tree-3-3.west](b-3-3){};
+    \node[bullet,left=3.14mm of tree-5-3.west](b-5-3){};
+    \draw[->] (b-3-1) -- (b-2-2);
+    \draw[->] (b-2-2) -- (b-1-3);
+    \draw[->] (b-2-2) -- (b-3-3);
+    \draw[->] (b-3-1) -- (b-4-2);
+    \draw[->] (b-4-2) -- (b-3-3);
+    \draw[->] (b-4-2) -- (b-5-3);
+  \end{tikzpicture}
+```
+:::
+
+
+
+## Option valuation with binomial trees 
+### Calculating option values at maturity
+
+:::{.tc}
+```{.tikz}
+\begin{tikzpicture}[>=stealth,sloped,font=\sffamily,every node/.style={scale=4}]
+    \matrix (tree) [%
+      matrix of nodes,
+      minimum size=1cm,
+      column sep=4cm,
+      row sep=1.5cm,nodes={text width=22em}
+          ]
+    {
+          &   &  {\LARGE $S_0uu$ \\ {\color{blue} $f_{uu} = max(K - S_0uu, 0)$}} \\
+          & \; &   \\
+     {\LARGE $S_0$} &   &  {\LARGE $S_0ud$ \\ {\color{blue} $f_{ud} = max(K - S_0ud, 0)$}}\\
+          & \; &   \\
+          &   &  {\LARGE $S_0dd$ \\ {\color{blue} $f_{dd} = max(K - S_0dd, 0)$}}\\
+    };
+    \node[bullet,left=-8mm of tree-3-1.west](b-3-1){};
+    \node[bullet,left=3.14mm of tree-2-2.west,label=above:{\LARGE $S_0u$}](b-2-2){};
+    \node[bullet,left=3.14mm of tree-4-2.west,label=above:{\LARGE $S_0d$}](b-4-2){};
+    \node[bullet,left=3.14mm of tree-1-3.west](b-1-3){};
+    \node[bullet,left=3.14mm of tree-3-3.west](b-3-3){};
+    \node[bullet,left=3.14mm of tree-5-3.west](b-5-3){};
+    \draw[->] (b-3-1) -- (b-2-2);
+    \draw[->] (b-2-2) -- (b-1-3);
+    \draw[->] (b-2-2) -- (b-3-3);
+    \draw[->] (b-3-1) -- (b-4-2);
+    \draw[->] (b-4-2) -- (b-3-3);
+    \draw[->] (b-4-2) -- (b-5-3);
+  \end{tikzpicture}
+```
+:::
+
+
+
+## Option valuation with binomial trees 
+### Calculating option values at all previous nodes
+
+
+:::{.tc}
+```{.tikz}
+\begin{tikzpicture}[>=stealth,sloped,font=\sffamily,every node/.style={scale=4}]
+    \matrix (tree) [%
+      matrix of nodes,
+      minimum size=1cm,
+      column sep=4cm,
+      row sep=1.5cm,nodes={text width=22em}
+          ]
+    {
+          &   &  {\LARGE $S_0uu$ \\ {\color{blue} $f_{uu} = max(K - S_0uu, 0)$}} \\
+          & {\LARGE \color{purple} \\[0.6cm] $f_{u} = max((p \times f_{uu} + (1-p) \times f_{ud}) \times e^{-r\Delta t}, K- S_0u)$} &   \\
+     {\LARGE $S_0$} &   &  {\LARGE $S_0ud$ \\ {\color{blue} $f_{ud} = max(K - S_0ud, 0)$}}\\
+          & {\LARGE \color{purple} \\[0.6cm] $f_{d} = max((p \times f_{ud} + (1-p) \times f_{dd}) \times e^{-r\Delta t}, K- S_0d)$} &   \\
+          &   &  {\LARGE $S_0dd$ \\ {\color{blue} $f_{dd} = max(K - S_0dd, 0)$}}\\
+    };
+    \node[bullet,left=-8mm of tree-3-1.west](b-3-1){};
+    \node[bullet,left=3.14mm of tree-2-2.west,label=above:{\LARGE $S_0u$}](b-2-2){};
+    \node[bullet,left=3.14mm of tree-4-2.west,label=above:{\LARGE $S_0d$}](b-4-2){};
+    \node[bullet,left=3.14mm of tree-1-3.west](b-1-3){};
+    \node[bullet,left=3.14mm of tree-3-3.west](b-3-3){};
+    \node[bullet,left=3.14mm of tree-5-3.west](b-5-3){};
+    \draw[->] (b-3-1) -- (b-2-2);
+    \draw[->] (b-2-2) -- (b-1-3);
+    \draw[->] (b-2-2) -- (b-3-3);
+    \draw[->] (b-3-1) -- (b-4-2);
+    \draw[->] (b-4-2) -- (b-3-3);
+    \draw[->] (b-4-2) -- (b-5-3);
+  \end{tikzpicture}
+```
+:::
+
+
+## Option valuation with binomial trees 
+### Calculating option values at all previous nodes
+
+
+:::{.tc}
+```{.tikz}
+\begin{tikzpicture}[>=stealth,sloped,font=\sffamily,every node/.style={scale=4}]
+    \matrix (tree) [%
+      matrix of nodes,
+      minimum size=1cm,
+      column sep=4cm,
+      row sep=1.5cm,nodes={text width=22em}
+          ]
+    {
+          &   &  {\LARGE $S_0uu$ \\ {\color{blue} $f_{uu} = max(K - S_0uu, 0)$}} \\
+          & {\LARGE \color{purple} \\[0.6cm] $f_{u} = max((p \times f_{uu} + (1-p) \times f_{ud}) \times e^{-r\Delta t}, K- S_0u)$} &   \\
+     {\LARGE \color{teal} $S_0 \\[0.2cm] f = max((p \times f_{u} + (1-p) \times f_{d}) \times e^{-r\Delta t}, K- S_0)$} &   &  {\LARGE $S_0ud$ \\ {\color{blue} $f_{ud} = max(K - S_0ud, 0)$}}\\
+          & {\LARGE \color{purple} \\[0.6cm] $f_{d} = max((p \times f_{ud} + (1-p) \times f_{dd}) \times e^{-r\Delta t}, K- S_0d)$} &   \\
+          &   &  {\LARGE $S_0dd$ \\ {\color{blue} $f_{dd} = max(K - S_0dd, 0)$}}\\
+    };
+    \node[bullet,left=-8mm of tree-3-1.west](b-3-1){};
+    \node[bullet,left=3.14mm of tree-2-2.west,label=above:{\LARGE $S_0u$}](b-2-2){};
+    \node[bullet,left=3.14mm of tree-4-2.west,label=above:{\LARGE $S_0d$}](b-4-2){};
+    \node[bullet,left=3.14mm of tree-1-3.west](b-1-3){};
+    \node[bullet,left=3.14mm of tree-3-3.west](b-3-3){};
+    \node[bullet,left=3.14mm of tree-5-3.west](b-5-3){};
+    \draw[->] (b-3-1) -- (b-2-2);
+    \draw[->] (b-2-2) -- (b-1-3);
+    \draw[->] (b-2-2) -- (b-3-3);
+    \draw[->] (b-3-1) -- (b-4-2);
+    \draw[->] (b-4-2) -- (b-3-3);
+    \draw[->] (b-4-2) -- (b-5-3);
+  \end{tikzpicture}
+```
+:::
+
+[Binomial trees – Derivatives](https://derivatives.nelsonareal.net/chapter-4/ch-4.4-binomial_trees.html)
+
+
+# R implementation {background-color="#F1F3E0"}
+
+## R implementation 
+
+::: {.panel-tabset .Small}
+
+### Naive
+
+:::{.huge}
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include ../R/ap_naive.R >}}
+```
+
+:::
+
+
+### v1 - Vectors 
+
+Vectors instead of matrices
+
+:::{.huge}
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include ../R/ap_v1.R >}}
+```
+
+:::
+
+
+### v2 - Vectors
+
+Vectors instead of matrices without the first loop
+
+:::{.huge}
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include ../R/ap_v2.R >}}
+```
+
+:::
+
+
+### v3 - Vectors
+
+Similar to v2 but with defensive programming
+
+:::{.huge}
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include ../R/ap_v3.R >}}
+```
+
+:::
+
+:::
+
+## A naive implementation in R 
+
+There are other ways that the convergence can be improved:
+
+- Alternative parameters (e.g., Jarrow-Rudd, Tian, Leisen-Reimer)
+- Control variates
+- Extrapolation techniques (e.g., Richardson extrapolation)
+
+We just want to focus on computational performance improvements.
+
+## Benchmarking the R implementations
+
+With only one option:
+
+::: {.panel-tabset}
+
+### Code
+
+```{r}
+#| echo: true
+#| eval: false
+s <- 40
+k <- 40
+v <- 0.30
+r <- 0.08
+tt <- 0.25
+d <- 0
+nstep <- 1000
+
+bench_result_one_option_r <- bench::mark(
+  ap_naive(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v1(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v2(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  min_iterations = 10L
+)
+```
+
+### Results
+
+```{r}
+#| echo: true
+bench_result_one_option_r
+```
+
+:::
+
+
+## Benchmarking the R implementations
+### With the sample set of 2500 options.
+
+```{r}
+#| echo: false
+option_parameters |>
+  head(12) |> 
+  gt()
+```
+
+
+## Benchmarking the R implementations
+### With the sample set of 2500 options - Naive
+
+::: {.panel-tabset}
+
+### Code
+
+```{r}
+#| echo: true
+#| eval: false
+bench::system_time({
+  option_values_naive <- option_parameters |>
+    mutate(
+      option_value = pmap_dbl(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_naive,
+        .progress = TRUE
+      )
+    )
+})
+```
+
+### Results
+
+```{r}
+#| echo: false
+r_naive_time_all_options
+```
+
+:::
+
+
+## Benchmarking the R implementations
+### With the sample set of 2500 options - R v3
+
+::: {.panel-tabset}
+
+### Code
+
+```{r}
+#| echo: true
+#| eval: false
+bench::system_time({
+  option_values_v3 <- option_parameters |>
+    mutate(
+      option_value = pmap_dbl(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3,
+        .progress = TRUE
+      )
+    )
+})
+```
+
+### Results
+
+```{r}
+#| echo: false
+r_v3_time_all_options
+```
+
+:::
+
+
+
+## Parallel computing in R
+
+The easiest way to reduce computational time is to use parallel computing.
+
+This can be done in several ways, but one of the most straightforward ways to parallelize code in R is to use the [furrr](https://furrr.futureverse.org/) package.
+
+The `furrr` package is a parallel implementation of the `purrr` package, which uses the [future](https://future.futureverse.org/) package to provide a simple and consistent API for parallel programming in R.
+
+This allows to parellelize code on the current machine or on a **cluster of machines**.
+
+
+## Parallel computing in R
+
+Before doing so, it is always a good idea to create **safe versions** of the functions to capture potential errors:
+
+```{r}
+#| echo: true
+#| eval: false
+ap_naive_safe <- safely(ap_naive)
+ap_v1_safe <- safely(ap_v1)
+ap_v2_safe <- safely(ap_v2)
+ap_v3_safe <- safely(ap_v3)
+```
+
+
+## Parallel computing in R
+
+::: {.panel-tabset}
+
+### Code
+
+```{r}
+#| echo: true
+#| eval: false
+plan(multisession, workers = 10)
+bench::system_time({
+  option_values_v3_par <- option_parameters |>
+    mutate(
+      option_value = future_pmap(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3_safe,
+        .progress = TRUE
+      )
+    ) |>
+    unnest_wider(option_value, names_sep = "_")
+})
+plan(sequential)
+```
+
+
+### Results - Naive 
+
+```{r}
+#| echo: false
+r_naive_par_time_all_options
+```
+
+
+### Results - v1 
+
+```{r}
+#| echo: false
+r_v1_par_time_all_options
+```
+
+
+### Results - v2
+
+```{r}
+#| echo: false
+r_v2_par_time_all_options
+```
+
+
+### Results - v3
+
+```{r}
+#| echo: false
+r_v3_par_time_all_options
+```
+
+:::
+
+
+## Check all implementations return the same results
+
+
+The results are identical across all implementations:
+```{r}
+#| echo: true
+#| eval: false
+identical(
+  option_values_naive_par,
+  option_values_v1_par
+)
+
+identical(
+  option_values_v1_par,
+  option_values_v2_par
+)
+
+identical(
+  option_values_v2_par,
+  option_values_v3_par
+)
+```
+
+
+
+## Improving performance with Rcpp
+
+Another approach to improve performance is to use a lower-level language like C++.
+
+Again, there are several ways to do this, but one of the most straightforward ways is to use the [Rcpp package](https://www.rcpp.org/).
+
+This package allows us to write C++ code, link and compile and call it as if it were an R function. And it makes it easy to use matrix algebra libraries like [Armadillo](https://arma.sourceforge.net/) and [Eigen](https://libeigen.gitlab.io/).
+
+For more details see: [Rcpp](https://www.rcpp.org/)
+
+
+
+## Improving performance with Rcpp
+### Using AI to convert R to C++
+
+This example has all the necessary components to use AI tools to convert R code to C++ code:
+
+- an algorithm already implemented in R;
+- a large dataset that can serve as a benchmark;
+- the new code can be inspected to ensure it is correct (the syntax will not be too different from R).
+
+So we can use a AI coding agent ([claude-code](https://github.com/anthropics/claude-code), [gemini-cli](https://github.com/google-gemini/gemini-cli), [codex](https://github.com/openai/codex), [Aider](https://aider.chat/), [Cline](https://cline.bot/), etc.) to help us convert the code to C++.
+
+
+## Improving performance with Rcpp
+### Caution when using AI coding agents
+
+- Make sure that you have a comprehensive test suite
+- **Make sure that the agent does not change the test suite**
+- Use agents in YOLO mode (e.g.: `claude --dangerously-skip-permissions`) at **your own peril!** Best to use a [**sandboxed microVM**]{.alert}.
+
+
+
+## Improving performance with Rcpp
+### Using claude-code to convert R to C++
+
+![](images/claude_code_cpp_1.png){width="800px"}
+
+
+## Improving performance with Rcpp
+### Using claude-code to convert R to C++
+
+The prompt used:
+
+> *Please convert convert the function in @ap_v3.R to Rccp, the focus is to maintain accuracy and improve performance.*
+
+was [**purposefully kept simple**]{.alert} to see how well the model performs with a minimal prompt.
+
+And yet...
+
+
+## Improving performance with Rcpp
+### Using claude-code to convert R to C++
+
+![](images/claude_code_cpp_2.png){width="800px"}
+
+
+## Improving performance with Rcpp
+### Using claude-code to convert R to C++
+
+![](images/claude_code_cpp_3.png){width="800px"}
+
+
+## Improving performance with Rcpp
+### Using claude-code to convert R to C++
+
+![](images/claude_code_cpp_4.png){width="800px"}
+
+
+## Improving performance with Rcpp
+### Using claude-code to convert R to C++
+
+![](images/claude_code_cpp_5.png){width="800px"}
+
+
+## Improving performance with Rcpp
+### Using claude-code to convert R to C++
+
+![](images/claude_code_cpp_6.png){width="800px"}
+
+
+
+## Improving performance with Rcpp
+
+::: {.panel-tabset}
+
+### R wrapper
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include ../R/ap_v3_rcpp.R >}}
+```
+
+### C++ code
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include ../R/ap_v3_rcpp.cpp >}}
+```
+
+### Source
+
+```{r}
+#| echo: true
+#| eval: false
+library(Rcpp)
+Rcpp::sourceCpp(here("R", "ap_v3_rcpp.cpp"))
+```
+
+
+### Benchmark with one option
+
+```{r}
+#| echo: true
+#| eval: false
+bench_result_one_option_rcpp <- bench::mark(
+  ap_v3(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_rcpp(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  min_iterations = 10L
+)
+```
+
+```{r}
+#| echo: false
+bench_result_one_option_rcpp
+```
+
+:::
+
+
+
+## Improving performance with Rcpp
+### Benchmark with all options
+
+::: {.panel-tabset}
+
+### Code
+
+```{r}
+#| echo: true
+#| eval: false
+rcpp_v3_time_all_options <- bench::system_time({
+  option_values_rcpp <- option_parameters |>
+    mutate(
+      option_value = pmap_dbl(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3_rcpp,
+        .progress = TRUE
+      )
+    )
+})
+```
+
+### Benchmark results
+
+```{r}
+#| echo: true
+rcpp_v3_time_all_options
+```
+
+The results are **the same at 15 significant digits**.
+
+:::
+
+
+
+## Improving performance with Rcpp
+### Parallelization 
+
+Since the Rcpp function creates an external pointer to another object in C++, we can only use it in R session where it was created. 
+
+So we need to modify the R wrapper function to create the external pointer inside the function. This is what the `ap_v3_rcpp_par` is doing.
+
+
+## Improving performance with Rcpp
+### Parallelization results - all options
+
+
+::: {.panel-tabset}
+
+### R wrapper
+
+```{r}
+#| echo: true
+#| eval: false
+plan(multisession, workers = 10)
+rcpp_v3_par_time_all_options <- bench::system_time({
+  option_values_rcpp_par <- option_parameters |>
+    mutate(
+      option_value = future_pmap(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3_rcpp_par_safe,
+        .progress = TRUE,
+        .options = furrr_options(seed = TRUE)
+      )
+    ) |>
+    unnest_wider(option_value, names_sep = "_")
+})
+```
+
+
+### Results 
+```{r}
+#| echo: true
+#| eval: true
+rcpp_v3_par_time_all_options
+```
+
+**The best approach would be to create a simple package with the compiled C++ code** and then use it in parallel without the need to create the external pointer inside the function.
+
+
+### Results with package
+
+```{r}
+#| echo: true
+#| eval: true
+rcpp_v3_par_time_all_options_pkg
+```
+
+[**Much better!**]{.alert}
+
+
+:::
+
+
+
+## Improving performance with Julia
+
+An alternative to C++ is to use [Julia](https://julialang.org/), a high-level, high-performance programming language for technical computing.
+
+We will be using [JuliaCall](https://juliainterop.github.io/JuliaCall/index.html)
+that allows for a seamless integration between R and Julia.
+
+
+## Improving performance with Julia
+### Using Claude-code to convert R to Julia
+
+![](images/claude_code_julia.png){width="800px"}
+
+
+## Improving performance with Julia
+
+::: {.panel-tabset}
+
+### R wrapper
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include ../R/ap_v3_julia.R >}}
+```
+
+
+### Julia code
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include ../R/ap_v3.jl >}}
+```
+
+
+### Benchmark with one option
+
+```{r}
+#| echo: true
+#| eval: false
+bench_result_one_option_julia <- bench::mark(
+  ap_v3(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_rcpp(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_julia(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  min_iterations = 10L
+)
+bench_result_one_option_julia
+```
+
+```{r}
+#| echo: false
+#| eval: true
+bench_result_one_option_julia
+```
+
+:::
+
+
+## Improving performance with Julia
+### Benchmark with all options
+
+::: {.panel-tabset}
+
+### Code
+
+```{r}
+#| echo: true
+#| eval: false
+julia_v3_time_all_options <- bench::system_time({
+  option_values_julia <- option_parameters |>
+    mutate(
+      option_value = pmap_dbl(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3_julia,
+        .progress = TRUE
+      )
+    )
+})
+```
+
+
+### Benchmark results
+
+```{r}
+#| echo: true
+#| eval: true
+julia_v3_time_all_options
+```
+
+The results are **the same at 13 significant digits**.
+
+:::
+
+
+## Improving performance with Julia
+### Parallelization 
+
+The Julia runtime needs to be started in each worker so the R wrapper function needs to include that step.
+
+Or we can do the parallelization directly in Julia.
+
+## Improving performance with Rcpp
+### Parallelization results - all options
+
+
+::: {.panel-tabset}
+
+
+### R code
+
+```{r}
+#| echo: true
+#| eval: false
+plan(multisession, workers = 8)
+julia_v3_par_time_all_options <- bench::system_time({
+  option_values_julia_par <- option_parameters |>
+    mutate(
+      option_value = future_pmap(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        ap_v3_julia_auto_safe,
+        .progress = TRUE,
+        .options = furrr_options(seed = TRUE)
+      )
+    ) |>
+    unnest_wider(option_value, names_sep = "_")
+})
+```
+
+
+### R wrapper
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include ../R/ap_v3_julia.R >}}
+```
+
+
+### Benchmark results
+
+```{r}
+#| echo: true
+#| eval: true
+julia_v3_par_time_all_options
+```
+
+Note that the [**best approach would be to parellelize the code directly in Julia**]{.alert}, but this is just an example of how to use Julia from R in parallel.
+
+### Parallelization in Julia
+
+```{r}
+#| echo: true
+#| eval: true
+julia_v3_batch_time_all_options
+```
+
+[**Much better!**]{.alert}
+
+
+:::
+
+
+
+## Using torch for GPU computing
+
+[Torch](http://torch.ch/)  is a scientific computing framework with wide support for machine learning algorithms and GPU computing.
+
+[PyTorch](https://pytorch.org/) is the Python implementation and [torch for R](https://torch.mlverse.org/) that mirrors PyTorch in R.
+
+The advantage of using torch is that it provides a simple way to move data and computations to the GPU, it has the advantage of running on different hardware.
+
+
+## Using torch for GPU computing
+
+There are many problems that can benefit from GPU computing, but not all.
+
+And the transition is not always straightforward. The american option pricing problem is a good example of this. See: [Chapter 45. Options Pricing on the GPU | NVIDIA Developer](https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-45-options-pricing-gpu)
+
+Also consider numerical accuracy when using GPUs, as they may use lower precision arithmetic, the memory that is available, and the overhead of moving data between the CPU and GPU. See: [Numerical accuracy — PyTorch 2.9 documentation](https://docs.pytorch.org/docs/stable/notes/numerical_accuracy.html)
+
+
+## Using torch for GPU computing
+### Parallelization results - all options
+
+::: {.panel-tabset}
+
+### R code
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include ../R/ap_v3_torch.R >}}
+```
+
+
+### Benchmark results
+
+```{r}
+#| echo: true
+#| eval: false
+# Batch size = 500 (5 batches)
+torch_v3_time_batch_500 <- bench::system_time({
+  option_values_torch_500 <- process_torch_batches(
+    option_parameters,
+    batch_size = 500,
+    nstep = nstep
+  )
+})
+```
+
+```{r}
+#| echo: true
+#| eval: true
+torch_v3_time_batch_500
+```
+
+They are only equal up to [**4 significant digits**]{.alert} due to differences in floating point arithmetic on the GPU. On a mac the GPU uses 32-bit floats by default which limits precision.
+
+:::
+
+
+## Summary
+
+:::{.large}
+```{r}
+tibble(
+  approach = c("Naive R", "V3 R", "V3 R parallel", "V3 Rcpp parallel", "V3 Rcpp parallel (package)", "V3 Julia (parellization in R)", "V3 Julia (parellization in Julia)"),
+  time = c(
+    as.numeric(r_naive_time_all_options["real"]),
+    as.numeric(r_v3_time_all_options["real"]),
+    as.numeric(r_v3_par_time_all_options["real"]),
+    as.numeric(rcpp_v3_par_time_all_options["real"]),
+    as.numeric(rcpp_v3_par_time_all_options_pkg["real"]),
+    as.numeric(julia_v3_par_time_all_options["real"]),
+    as.numeric(julia_v3_batch_time_all_options["real"])
+  )
+) |>
+  mutate(
+    speedup = time[1] / time,
+    `time in minutes` = format(bench::as_bench_time(time))
+  ) |> 
+    gt()
+```
+:::
+
+
+# HDFE regression {background-color="#A1BC98"}
+
+
+
