@@ -30,6 +30,11 @@ build:
 	@echo "Building package tarball..."
 	$(R) CMD build $(PKG_DIR)
 
+# Create distributable tar.gz (same as build, but clearer name)
+dist: build
+	@echo "Distribution package created: $(PKG_NAME)_*.tar.gz"
+	@echo "Install with: R CMD INSTALL $(PKG_NAME)_*.tar.gz"
+
 # Run R CMD check
 check: build
 	@echo "Checking package..."
@@ -57,6 +62,7 @@ help:
 	@echo "  make install    - Generate Rcpp exports and install package (default)"
 	@echo "  make document   - Generate documentation using roxygen2"
 	@echo "  make build      - Build source package tarball"
+	@echo "  make dist       - Create distributable tar.gz package"
 	@echo "  make check      - Run R CMD check"
 	@echo "  make clean      - Remove build artifacts"
 	@echo "  make reinstall  - Clean and reinstall package"
