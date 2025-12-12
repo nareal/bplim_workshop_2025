@@ -1,0 +1,3 @@
+useDynLib(apopt, .registration = TRUE)
+importFrom(Rcpp, sourceCpp)
+export(ap_v3_rcpp)

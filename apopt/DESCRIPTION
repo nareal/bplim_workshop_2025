@@ -1,0 +1,14 @@
+Package: apopt
+Type: Package
+Title: American Put Option Pricing
+Version: 0.1.0
+Authors@R: person("Nelson", "Areal", email = "nareal@eeg.uminho.pt", role = c("aut", "cre"))
+Description: Fast implementation of American put option pricing using the
+    Cox-Ross-Rubinstein binomial tree model. Includes pure R and Rcpp implementations.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.0.0
+Imports:
+    Rcpp
+LinkingTo: Rcpp
