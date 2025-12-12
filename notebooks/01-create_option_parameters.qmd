@@ -2,10 +2,19 @@
 title: "Create a options sample parameters dataset"
 author: "Nelson Areal"
 date: 2025-12-10
-format: html
+format: 
+  html: 
+    toc: true
+    toc-title: "Contents"
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    embed-resources: true
 ---
 
 ```{r}
+#| echo: true
+#| message: false
 library(tibble)
 library(here)
 ```
