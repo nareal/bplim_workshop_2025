@@ -12,6 +12,8 @@ library(tidyverse)
 library(bench)
 library(furrr)
 library(Rcpp)
+library(JuliaCall)
+library(torch)
 library(here)
 
 source(here("R", "ap_naive.R"))
@@ -22,6 +24,7 @@ Rcpp::sourceCpp(here("R", "ap_v3_rcpp.cpp"))
 source(here("R", "ap_v3_rcpp.R"))
 source(here("R", "ap_v3_rcpp_par.R"))
 source(here("R", "ap_v3_julia.R"))
+source(here("R", "ap_v3_torch.R"))
 ```
 
 
@@ -478,11 +481,117 @@ stopifnot(all.equal(
 
 ## Using torch
 
+The torch package provides GPU acceleration for tensor operations. Our implementation processes multiple options in batches on the GPU, making it highly efficient for large-scale option pricing.
+
+### Single Option Benchmark
+
+First, let's verify that a single option (as a batch of 1) produces the correct result:
+
+```{r}
+bench_result_one_option_torch <- bench::mark(
+  ap_v3(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_rcpp(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_julia(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_torch(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  min_iterations = 10L,
+  check = FALSE
+)
+
+bench_result_one_option_torch
+```
+
+Verify correctness:
+
+```{r}
+stopifnot(all.equal(
+  ap_v3(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  ap_v3_torch(S0 = s, K = k, r = r, q = d, tt = tt, sigma = v, steps = nstep),
+  tolerance = 1e-4
+))
+```
+
+Note that on my mac the GPU uses 32-bit floats by default which limits precision, so the results are only equal up to 4 significant digits.
 
 
+### Benchmark on Full Dataset with Batching
+
+The torch implementation is designed to process multiple options simultaneously on the GPU. We'll group our 2,500 options into batches and process each batch in a single GPU call.
+
+First, let's create a helper function to process batches:
+
+```{r}
+process_torch_batches <- function(data, batch_size, nstep) {
+  # Add batch ID
+  data_with_batches <- data |>
+    mutate(batch_id = ceiling(row_number() / batch_size))
+
+  # Process each batch
+  results <- data_with_batches |>
+    group_by(batch_id) |>
+    nest() |>
+    mutate(
+      option_value = map(data, function(batch_data) {
+        ap_v3_torch(
+          S0 = batch_data$asset_price,
+          K = batch_data$exercise_price,
+          r = batch_data$riskless_rate,
+          q = batch_data$dividend_rate,
+          tt = batch_data$time_to_maturity,
+          sigma = batch_data$volatility,
+          steps = nstep
+        )
+      })
+    ) |>
+    unnest(c(data, option_value))
+
+  return(results)
+}
+```
+
+Now benchmark with different batch sizes:
+
+```{r}
+# Batch size = 100 (25 batches)
+torch_v3_time_batch_100 <- bench::system_time({
+  option_values_torch_100 <- process_torch_batches(
+    option_parameters,
+    batch_size = 100,
+    nstep = nstep
+  )
+})
+torch_v3_time_batch_100
+```
+
+```{r}
+# Batch size = 500 (5 batches)
+torch_v3_time_batch_500 <- bench::system_time({
+  option_values_torch_500 <- process_torch_batches(
+    option_parameters,
+    batch_size = 500,
+    nstep = nstep
+  )
+})
+torch_v3_time_batch_500
+```
+
+Verify correctness - all implementations should produce identical results:
+
+```{r}
+stopifnot(all.equal(
+  option_values_v3_par$option_value_result,
+  option_values_torch_100$option_value,
+  tolerance = 1e-4
+))
 
 
+stopifnot(all.equal(
+  option_values_v3_par$option_value_result,
+  option_values_torch_500$option_value,
+  tolerance = 1e-4
+))
+```
 
+They are only equal up to 4 significant digits due to differences in floating point arithmetic on the GPU. On my mac the GPU uses 32-bit floats by default which limits precision.
 
 
 ## Saving all the benchmark times
@@ -502,6 +611,9 @@ save(
   bench_result_one_option_julia,
   julia_v3_time_all_options,
   julia_v3_par_time_all_options,
+  bench_result_one_option_torch,
+  torch_v3_time_batch_100,
+  torch_v3_time_batch_500,
   file = here("data", "processed", "benchmark_results.RData")
 )
 ```
