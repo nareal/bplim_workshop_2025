@@ -58,7 +58,7 @@ Discuss some strategies to optimize code performance:
 We are going to illustrate these strategies using two examples.
 
 
-## Some initial thoughs on optimization
+## Some initial thoughts on optimization
 
 > "*Programmers waste enormous amounts of time thinking about, or worrying about, the speed of noncritical parts of their programs, and these attempts at efficiency actually have a strong negative impact when debugging and maintenance are considered. We should forget about small efficiencies, say about 97% of the time: **premature optimization is the root of all evil.** [**Yet we should not pass up our opportunities in that critical 3%**]{.alert}.*"
 
@@ -120,7 +120,7 @@ We are going to assume an **American put option** for this example.
 
 Once we have the parameters, we can proceed to build the binomial tree and value the option.
 
-We need will be using the CRR (Cox-Ross-Rubinstein) parameters:
+We will be using the CRR (Cox-Ross-Rubinstein) parameters:
 
 - $u = e^{\sigma\sqrt{\Delta t}}$
 - $d = e^{-\sigma\sqrt{\Delta t}}$
@@ -501,7 +501,7 @@ This can be done in several ways, but one of the most straightforward ways to pa
 
 The `furrr` package is a parallel implementation of the `purrr` package, which uses the [future](https://future.futureverse.org/) package to provide a simple and consistent API for parallel programming in R.
 
-This allows to parellelize code on the current machine or on a **cluster of machines**.
+This allows us to parallelize code on the current machine or on a **cluster of machines**.
 
 
 ## Parallel computing in R
@@ -631,7 +631,7 @@ This example has all the necessary components to use AI tools to convert R code 
 - a large dataset that can serve as a benchmark;
 - the new code can be inspected to ensure it is correct (the syntax will not be too different from R).
 
-So we can use a AI coding agent ([claude-code](https://github.com/anthropics/claude-code), [gemini-cli](https://github.com/google-gemini/gemini-cli), [codex](https://github.com/openai/codex), [Aider](https://aider.chat/), [Cline](https://cline.bot/), etc.) to help us convert the code to C++.
+So we can use an AI coding agent ([claude-code](https://github.com/anthropics/claude-code), [gemini-cli](https://github.com/google-gemini/gemini-cli), [codex](https://github.com/openai/codex), [Aider](https://aider.chat/), [Cline](https://cline.bot/), etc.) to help us convert the code to C++.
 
 
 ## Improving performance with Rcpp
@@ -654,7 +654,7 @@ So we can use a AI coding agent ([claude-code](https://github.com/anthropics/cla
 
 The prompt used:
 
-> *Please convert convert the function in @ap_v3.R to Rccp, the focus is to maintain accuracy and improve performance.*
+> *Please convert the function in @ap_v3.R to Rcpp, the focus is to maintain accuracy and improve performance.*
 
 was [**purposefully kept simple**]{.alert} to see how well the model performs with a minimal prompt.
 
@@ -1017,7 +1017,7 @@ julia_v3_par_time_all_options <- bench::system_time({
 julia_v3_par_time_all_options
 ```
 
-Note that the [**best approach would be to parellelize the code directly in Julia**]{.alert}, but this is just an example of how to use Julia from R in parallel.
+Note that the [**best approach would be to parallelize the code directly in Julia**]{.alert}, but this is just an example of how to use Julia from R in parallel.
 
 ### Parallelization in Julia
 
@@ -1097,7 +1097,7 @@ They are only equal up to [**4 significant digits**]{.alert} due to differences 
 :::{.large}
 ```{r}
 tibble(
-  approach = c("Naive R", "V3 R", "V3 R parallel", "V3 Rcpp parallel", "V3 Rcpp parallel (package)", "V3 Julia (parellization in R)", "V3 Julia (parellization in Julia)"),
+  approach = c("Naive R", "V3 R", "V3 R parallel", "V3 Rcpp parallel", "V3 Rcpp parallel (package)", "V3 Julia (parallelization in R)", "V3 Julia (parallelization in Julia)"),
   time = c(
     as.numeric(r_naive_time_all_options["real"]),
     as.numeric(r_v3_time_all_options["real"]),
