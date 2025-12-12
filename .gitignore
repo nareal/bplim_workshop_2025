@@ -1,3 +1,5 @@
 docs/
 /.quarto/
 **/*.quarto_ipynb
+*.tar.gz
+*.Rcheck/
