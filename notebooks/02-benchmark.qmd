@@ -15,11 +15,13 @@ library(Rcpp)
 library(JuliaCall)
 library(torch)
 library(here)
+library(apopt) # Our package with pre-compiled Rcpp code
 
 source(here("R", "ap_naive.R"))
 source(here("R", "ap_v1.R"))
 source(here("R", "ap_v2.R"))
 source(here("R", "ap_v3.R"))
+# For comparison, we still source the Rcpp implementation without the package
 Rcpp::sourceCpp(here("R", "ap_v3_rcpp.cpp"))
 source(here("R", "ap_v3_rcpp.R"))
 source(here("R", "ap_v3_rcpp_par.R"))
@@ -314,10 +316,8 @@ stopifnot(all.equal(
 ))
 ```
 
-
 We can also parallelize the Rcpp implementation using the parallel-safe wrapper.
 Since the Rcpp function creates an external pointer to another object in C++, we can only use it in R session where it was created. So we need to modify the R wrapper function to create the external pointer inside the function. This is what the `ap_v3_rcpp_par` is doing.
-
 
 We first create a safe version of the Rcpp function:
 ```{r}
@@ -325,7 +325,7 @@ ap_v3_rcpp_par_safe <- safely(ap_v3_rcpp_par)
 ```
 
 ```{r}
-plan(multisession, workers = 8)
+plan(multisession, workers = 10)
 rcpp_v3_par_time_all_options <- bench::system_time({
   option_values_rcpp_par <- option_parameters |>
     mutate(
@@ -359,6 +359,77 @@ stopifnot(all.equal(
   option_values_rcpp_par$option_value_result,
   tolerance = 1e-15
 ))
+```
+
+
+### Optimized Parallel Rcpp using a Package
+
+The previous approach (`ap_v3_rcpp_par`) has overhead because each worker must compile the C++ code on-demand. The best solution is to create a proper R package with pre-compiled code.
+
+We created the `apopt` package which includes:
+- Pre-compiled C++ code (no runtime compilation needed)
+- Proper package structure with DESCRIPTION, NAMESPACE
+- The `ap_v3_rcpp()` function exported and ready to use
+
+Benefits of the package approach:
+1. **No compilation overhead**: C++ code is compiled once during package installation
+2. **Works seamlessly in parallel**: Each worker loads the pre-compiled shared library
+3. **No external pointer issues**: The package's dynamic library is loaded in each worker's session
+4. **Reusable**: Can be easily shared and installed on other systems
+
+Since the `apopt` package exports the same `ap_v3_rcpp()` function, we can use it directly in parallel without any wrapper:
+
+```{r}
+plan(multisession, workers = 10)
+
+# Benchmark using the apopt package
+# Workers load the pre-compiled package - no compilation overhead!
+rcpp_v3_par_time_all_options_pkg <- bench::system_time({
+  option_values_rcpp_par_pkg <- option_parameters |>
+    mutate(
+      option_value = future_pmap(
+        list(
+          S0 = asset_price,
+          K = exercise_price,
+          r = riskless_rate,
+          q = dividend_rate,
+          tt = time_to_maturity,
+          sigma = volatility,
+          steps = nstep
+        ),
+        safely(apopt::ap_v3_rcpp), # Using the package version
+        .progress = TRUE,
+        .options = furrr_options(seed = TRUE)
+      )
+    ) |>
+    unnest_wider(option_value, names_sep = "_")
+})
+rcpp_v3_par_time_all_options_pkg
+plan(sequential)
+```
+
+Verify correctness:
+```{r}
+stopifnot(all.equal(
+  option_values_v3$option_value,
+  option_values_rcpp_par_pkg$option_value_result,
+  tolerance = 1e-15
+))
+```
+
+Compare the three Rcpp parallel approaches:
+```{r}
+tibble(
+  approach = c("On-demand per-call compilation", "Using pre-compiled package"),
+  time = c(
+    as.numeric(rcpp_v3_par_time_all_options["real"]),
+    as.numeric(rcpp_v3_par_time_all_options_pkg["real"])
+  )
+) |>
+  mutate(
+    speedup = time[1] / time,
+    time_str = format(bench::as_bench_time(time))
+  )
 ```
 
 
@@ -653,6 +724,7 @@ save(
   bench_result_one_option_rcpp,
   rcpp_v3_time_all_options,
   rcpp_v3_par_time_all_options,
+  rcpp_v3_par_time_all_options_pkg,
   bench_result_one_option_julia,
   julia_v3_time_all_options,
   julia_v3_par_time_all_options,
