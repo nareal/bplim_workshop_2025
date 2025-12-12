@@ -1,8 +1,15 @@
 ---
 title: "Benchmarking American Put option pricing algorithms"
 author: "Nelson Areal"
-date: 2025-12-10
-format: html
+date: 2025-12-12
+format: 
+  html:
+    toc: true
+    toc-title: "Contents"
+    toc-depth: 4
+    number-sections: true
+    number-depth: 4
+    embed-resources: true
 ---
 
 Load the libraries and source the functions.
@@ -29,6 +36,8 @@ source(here("R", "ap_v3_julia.R"))
 source(here("R", "ap_v3_torch.R"))
 ```
 
+
+# R implementation
 
 ## Benchmark single option pricing with different R implementations
 
@@ -76,7 +85,7 @@ r_naive_time_all_options <- bench::system_time({
           steps = nstep
         ),
         ap_naive,
-        .progress = TRUE
+        .progress = FALSE
       )
     )
 })
@@ -100,7 +109,7 @@ r_v3_time_all_options <- bench::system_time({
           steps = nstep
         ),
         ap_v3,
-        .progress = TRUE
+        .progress = FALSE
       )
     )
 })
@@ -137,7 +146,7 @@ r_v3_par_time_all_options <- bench::system_time({
           steps = nstep
         ),
         ap_v3_safe,
-        .progress = TRUE
+        .progress = FALSE
       )
     ) |>
     unnest_wider(option_value, names_sep = "_")
@@ -165,7 +174,7 @@ r_v2_par_time_all_options <- bench::system_time({
           steps = nstep
         ),
         ap_v2_safe,
-        .progress = TRUE
+        .progress = FALSE
       )
     ) |>
     unnest_wider(option_value, names_sep = "_")
@@ -193,7 +202,7 @@ r_v1_par_time_all_options <- bench::system_time({
           steps = nstep
         ),
         ap_v1_safe,
-        .progress = TRUE
+        .progress = FALSE
       )
     ) |>
     unnest_wider(option_value, names_sep = "_")
@@ -221,7 +230,7 @@ r_naive_par_time_all_options <- bench::system_time({
           steps = nstep
         ),
         ap_naive_safe,
-        .progress = TRUE
+        .progress = FALSE
       )
     ) |>
     unnest_wider(option_value, names_sep = "_")
@@ -252,11 +261,11 @@ identical(
 ```
 
 
-## Using Rcpp
+# Using Rcpp
 
 The Rcpp package allows us to write C++ code that can be called from R, providing significant performance improvements for computationally intensive tasks like the binomial tree algorithm.
 
-### Single Option Benchmark
+## Single Option Benchmark
 
 Let's compare the performance of `ap_v3` (pure R) with `ap_v3_rcpp` (C++ core with R wrapper):
 
@@ -279,7 +288,7 @@ stopifnot(all.equal(
 ))
 ```
 
-### Benchmark on full dataset
+## Benchmark on full dataset
 
 Now let's test the Rcpp implementation on the full dataset of 2,500 options:
 
@@ -298,7 +307,7 @@ rcpp_v3_time_all_options <- bench::system_time({
           steps = nstep
         ),
         ap_v3_rcpp,
-        .progress = TRUE
+        .progress = FALSE
       )
     )
 })
@@ -340,7 +349,7 @@ rcpp_v3_par_time_all_options <- bench::system_time({
           steps = nstep
         ),
         ap_v3_rcpp_par_safe,
-        .progress = TRUE,
+        .progress = FALSE,
         .options = furrr_options(seed = TRUE)
       )
     ) |>
@@ -362,7 +371,7 @@ stopifnot(all.equal(
 ```
 
 
-### Optimized Parallel Rcpp using a Package
+## Optimized Parallel Rcpp using a Package
 
 The previous approach (`ap_v3_rcpp_par`) has overhead because each worker must compile the C++ code on-demand. The best solution is to create a proper R package with pre-compiled code.
 
@@ -398,7 +407,7 @@ rcpp_v3_par_time_all_options_pkg <- bench::system_time({
           steps = nstep
         ),
         safely(apopt::ap_v3_rcpp), # Using the package version
-        .progress = TRUE,
+        .progress = FALSE,
         .options = furrr_options(seed = TRUE)
       )
     ) |>
@@ -433,7 +442,7 @@ tibble(
 ```
 
 
-## Using Julia
+# Using Julia
 
 We can use [JuliaCall: an R package for seamless integration between R and Julia](https://joss.theoj.org/papers/10.21105/joss.01284) package to call Julia code from R.
 
@@ -444,7 +453,7 @@ init_julia_ap()
 
 We can now compare the performance of `ap_v3` (pure R) with `ap_v3_julia` (Julia core with R wrapper):
 
-### Single Option Benchmark
+## Single Option Benchmark
 
 ```{r}
 bench_result_one_option_julia <- bench::mark(
@@ -467,7 +476,7 @@ stopifnot(all.equal(
 ```
 
 
-### Benchmark on Full Dataset
+## Benchmark on Full Dataset
 
 Now let's test the Rcpp implementation on the full dataset of 2,500 options:
 
@@ -486,7 +495,7 @@ julia_v3_time_all_options <- bench::system_time({
           steps = nstep
         ),
         ap_v3_julia,
-        .progress = TRUE
+        .progress = FALSE
       )
     )
 })
@@ -513,7 +522,7 @@ ap_v3_julia_auto_safe <- safely(ap_v3_julia_auto)
 ```
 
 ```{r}
-plan(multisession, workers = 8)
+plan(multisession, workers = 10)
 julia_v3_par_time_all_options <- bench::system_time({
   option_values_julia_par <- option_parameters |>
     mutate(
@@ -528,7 +537,7 @@ julia_v3_par_time_all_options <- bench::system_time({
           steps = nstep
         ),
         ap_v3_julia_auto_safe,
-        .progress = TRUE,
+        .progress = FALSE,
         .options = furrr_options(seed = TRUE)
       )
     ) |>
@@ -550,7 +559,7 @@ stopifnot(all.equal(
 ```
 
 
-### Batch Processing with Julia-side Parallelization
+## Batch Processing with Julia-side parallelization
 
 The previous parallel approach has significant overhead because each R worker initializes its own Julia runtime. A much more efficient approach is to send all parameters to Julia at once and use Julia's native multi-threading.
 
@@ -595,11 +604,11 @@ This batch approach should be significantly faster than the R-side parallel appr
 - Julia's efficient native threading via `Threads.@threads`
 
 
-## Using torch
+# Using torch
 
 The torch package provides GPU acceleration for tensor operations. Our implementation processes multiple options in batches on the GPU, making it highly efficient for large-scale option pricing.
 
-### Single Option Benchmark
+## Single Option Benchmark
 
 First, let's verify that a single option (as a batch of 1) produces the correct result:
 
@@ -629,7 +638,7 @@ stopifnot(all.equal(
 Note that on my mac the GPU uses 32-bit floats by default which limits precision, so the results are only equal up to 4 significant digits.
 
 
-### Benchmark on Full Dataset with Batching
+## Benchmark on Full Dataset with Batching
 
 The torch implementation is designed to process multiple options simultaneously on the GPU. We'll group our 2,500 options into batches and process each batch in a single GPU call.
 
@@ -710,7 +719,7 @@ stopifnot(all.equal(
 They are only equal up to 4 significant digits due to differences in floating point arithmetic on the GPU. On my mac the GPU uses 32-bit floats by default which limits precision.
 
 
-## Saving all the benchmark times
+# Saving all the benchmark times
 
 ```{r}
 save(
