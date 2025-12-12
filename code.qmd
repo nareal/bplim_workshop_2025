@@ -1,0 +1,108 @@
+---
+title: "R, C++ and Julia code"
+format: 
+    html:
+      toc: true
+      toc-location: right
+      toc-depth: 3
+      number-sections: true
+---
+
+You can find below the functions implemented in R, C++ and Julia.
+
+# R Code
+
+## Different implementations of american put option using binomial trees
+
+### `ap_naive.R`
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include R/ap_naive.R >}}
+```
+
+
+### `ap_v1.R`
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include R/ap_v1.R >}}
+```
+
+
+### `ap_v2.R`
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include R/ap_v2.R >}}
+```
+
+
+### `ap_v3.R`
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include R/ap_v3.R >}}
+```
+
+
+### `ap_v3_torch.R`
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include R/ap_v3_torch.R >}}
+```
+
+
+## R wrappers to call C++ and Julia implementations
+
+### `ap_v3_rcpp.R`
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include R/ap_v3_rcpp.R >}}
+```
+
+
+### `ap_v3_rcpp_par.R`
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include R/ap_v3_rcpp_par.R >}}
+```
+
+
+
+### `ap_v3_julia.R`
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include R/ap_v3_julia.R >}}
+```
+
+
+# C++ Code
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include R/ap_v3_rcpp.cpp >}}
+```
+
+
+# Julia Code
+
+```{r}
+#| echo: true
+#| eval: false
+{{< include R/ap_v3.jl >}}
+```
+

@@ -1,0 +1,49 @@
+project:
+  type: website
+  render:
+    - "*.qmd"
+    - "!notebooks/*.qmd"
+    - "!slides/*.qmd"
+    
+website:
+  title: "BPlim Workshop 2025"
+  bread-crumbs: true
+  
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      #- sidebar:slides
+      #- sidebar:notebooks
+      #- sidebar:code
+    tools:
+      - icon: github
+        href:  https://github.com/nareal/bplim_workshop_2025
+        
+  sidebar:
+    style: "docked"
+    contents:
+      - text: "Workshop slides"
+        href: slides/2025_bplim_workshop-slides.html
+        target: _blank
+    
+      - section: "Notebooks"
+        
+        contents:
+        - text: "Create option parameters - Test suite"
+          href: notebooks/01-create_option_parameters.html
+          target: _blank
+        - text: "Benchmarking different implementations"
+          href: notebooks/02-benchmark.html
+          target: _blank
+      
+      - text: "R, C++ and Julia code"
+        href: code.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+
+execute:
+  freeze: auto

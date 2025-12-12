@@ -3,3 +3,4 @@ docs/
 **/*.quarto_ipynb
 *.tar.gz
 *.Rcheck/
+_site
