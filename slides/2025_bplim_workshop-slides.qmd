@@ -1094,6 +1094,8 @@ They are only equal up to [**4 significant digits**]{.alert} due to differences 
 
 ## Summary
 
+Results for the calculation of 2500 american put options in the test sample:
+
 :::{.large}
 
 ```{r}
@@ -1111,9 +1113,15 @@ tibble(
 ) |>
   mutate(
     speedup = time[1] / time,
-    `time in minutes` = format(bench::as_bench_time(time))
+    `total time` = format(bench::as_bench_time(time))
   ) |> 
-    gt()
+    select(-time) |> 
+    gt() |> 
+    opt_table_font(
+      font = google_font("Roboto"),
+      weight = "600",
+      size = "22px"
+    )
 ```
 
 :::
