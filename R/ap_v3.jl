@@ -70,3 +70,55 @@ function american_put_binomial(S0::Real, K::Real, r::Real, q::Real,
 
     return option_values[1]  # Option price at the root node
 end
+
+"""
+    american_put_binomial_batch(S0_vec, K_vec, r_vec, q_vec, tt_vec, sigma_vec, steps_vec)
+
+Calculate prices for multiple American put options using multi-threading.
+This is much more efficient than calling american_put_binomial in a loop.
+
+# Arguments
+All arguments should be vectors of the same length:
+- `S0_vec`: Vector of initial stock prices
+- `K_vec`: Vector of strike prices
+- `r_vec`: Vector of risk-free interest rates
+- `q_vec`: Vector of dividend yields
+- `tt_vec`: Vector of times to maturity
+- `sigma_vec`: Vector of volatilities
+- `steps_vec`: Vector of numbers of time steps
+
+# Returns
+- `Vector{Float64}`: Vector of option prices
+"""
+function american_put_binomial_batch(S0_vec::AbstractVector,
+                                     K_vec::AbstractVector,
+                                     r_vec::AbstractVector,
+                                     q_vec::AbstractVector,
+                                     tt_vec::AbstractVector,
+                                     sigma_vec::AbstractVector,
+                                     steps_vec::AbstractVector{<:Integer})
+    # Validate that all vectors have the same length
+    n = length(S0_vec)
+    if length(K_vec) != n || length(r_vec) != n || length(q_vec) != n ||
+       length(tt_vec) != n || length(sigma_vec) != n || length(steps_vec) != n
+        throw(ArgumentError("All input vectors must have the same length"))
+    end
+
+    # Pre-allocate result vector
+    results = Vector{Float64}(undef, n)
+
+    # Use multi-threading to process options in parallel
+    Threads.@threads for i in 1:n
+        results[i] = american_put_binomial(
+            S0_vec[i],
+            K_vec[i],
+            r_vec[i],
+            q_vec[i],
+            tt_vec[i],
+            sigma_vec[i],
+            steps_vec[i]
+        )
+    end
+
+    return results
+end

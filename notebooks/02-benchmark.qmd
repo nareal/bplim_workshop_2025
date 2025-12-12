@@ -479,6 +479,51 @@ stopifnot(all.equal(
 ```
 
 
+### Batch Processing with Julia-side Parallelization
+
+The previous parallel approach has significant overhead because each R worker initializes its own Julia runtime. A much more efficient approach is to send all parameters to Julia at once and use Julia's native multi-threading.
+
+First, let's reinitialize Julia with a specific number of threads (we'll use 10 threads):
+```{r}
+# Reinitialize Julia with 10 threads
+init_julia_ap(num_threads = 10)
+```
+
+Now benchmark the batch processing approach:
+```{r}
+julia_v3_batch_time_all_options <- bench::system_time({
+  option_values_julia_batch <- option_parameters |>
+    mutate(
+      option_value = ap_v3_julia_batch(
+        S0 = asset_price,
+        K = exercise_price,
+        r = riskless_rate,
+        q = dividend_rate,
+        tt = time_to_maturity,
+        sigma = volatility,
+        steps = nstep
+      )
+    )
+})
+
+julia_v3_batch_time_all_options
+```
+
+Verify correctness:
+```{r}
+stopifnot(all.equal(
+  option_values_v3$option_value,
+  option_values_julia_batch$option_value,
+  tolerance = 1e-13
+))
+```
+
+This batch approach should be significantly faster than the R-side parallel approach (`julia_v3_par_time_all_options`) because:
+- Single Julia runtime initialization (no overhead per worker)
+- One bulk data transfer instead of many small transfers
+- Julia's efficient native threading via `Threads.@threads`
+
+
 ## Using torch
 
 The torch package provides GPU acceleration for tensor operations. Our implementation processes multiple options in batches on the GPU, making it highly efficient for large-scale option pricing.
@@ -611,6 +656,7 @@ save(
   bench_result_one_option_julia,
   julia_v3_time_all_options,
   julia_v3_par_time_all_options,
+  julia_v3_batch_time_all_options,
   bench_result_one_option_torch,
   torch_v3_time_batch_100,
   torch_v3_time_batch_500,
