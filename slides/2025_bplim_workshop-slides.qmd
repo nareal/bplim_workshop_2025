@@ -40,10 +40,22 @@ diagram:
 library(tidyverse)
 library(bench)
 library(gt)
+library(qrcode)
 library(here)
 option_parameters <- readRDS(here("data", "processed", "option_parameters.rds"))
 load(here("data", "processed", "benchmark_results.RData"))
 ```
+
+## Link for the workshop materials
+
+Worksop materials are available at:
+```{r}
+#| echo: false
+code <- qrcode::qr_code("https://nareal.github.io/bplim_workshop_2025/")
+plot(code)
+```
+
+[https://nareal.github.io/bplim_workshop_2025/](https://nareal.github.io/bplim_workshop_2025/){target="_blank"}
 
 
 ## Plan for the session 
@@ -1129,5 +1141,14 @@ tibble(
 
 # HDFE regression {background-color="#A1BC98"}
 
+## HDFE regression
 
+Worksop materials for this part are available at:
+```{r}
+#| echo: false
+code <- qrcode::qr_code("https://github.com/reisportela/cp2hdfe")
+plot(code)
+```
+
+[https://github.com/reisportela/cp2hdfe](https://github.com/reisportela/cp2hdfe){target="_blank"}
 
