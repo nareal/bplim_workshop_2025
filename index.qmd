@@ -10,6 +10,7 @@ author:
       - NIPE
     orcid: 0000-0002-1157-0178
   - name: Miguel Portela
+    url: https://sites.google.com/site/reisportela
     orcid: 0000-0002-4721-2081
     email: miguel.portela@eeg.uminho.pt
     affiliations: 
