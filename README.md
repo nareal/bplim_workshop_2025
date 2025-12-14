@@ -1,4 +1,4 @@
-# BPlim workshop 2025
+# BPLIM workshop 2025
 
 **"Parallel and Cross-Language Computing: A Hands-On Workshop for Empirical Researchers"**
 

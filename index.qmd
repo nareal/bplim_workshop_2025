@@ -1,5 +1,5 @@
 ---
-title: BPlim workshop 2025
+title: BPLIM workshop 2025
 subtitle: "Parallel and Cross-Language Computing: A Hands-On Workshop for Empirical Researchers"
 author:
   - name: Nelson Areal
