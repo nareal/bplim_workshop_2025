@@ -41,6 +41,9 @@ website:
       - text: "R package"
         href: r_package.qmd
 
+      - text: "Fast High-Dimensional Fixed Effects (HDFE)"
+        href: HDFE.qmd
+
 format:
   html:
     theme: cosmo

@@ -1,0 +1,8 @@
+---
+title: "Fast High-Dimensional Fixed Effects (HDFE) regression"
+format: html
+---
+
+The materials and code for fast High-Dimensional Fixed Effects (HDFE) regression shown in the presentation are available at:
+[https://github.com/reisportela/cp2hdfe](https://github.com/reisportela/cp2hdfe)
+

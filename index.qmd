@@ -29,6 +29,13 @@ The session covers: (1) native R optimization strategies, (2) integrating C++ vi
 Attendees will leave with a practical framework for identifying performance bottlenecks and selecting appropriate optimization strategies for their computational research needs.
 
 
+## Workshop Materials
+
+The materials and code for the workshop are available at:
+
+- [https://github.com/nareal/bplim_workshop_2025](https://github.com/nareal/bplim_workshop_2025)
+- [https://github.com/reisportela/cp2hdfe](https://github.com/reisportela/cp2hdfe)
+
 :::{.callout-important}
 ## Disclaimer
 The content presented is for educational purposes only and reflects the views of the instructors. 
