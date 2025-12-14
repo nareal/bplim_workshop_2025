@@ -33,8 +33,8 @@ Attendees will leave with a practical framework for identifying performance bott
 
 The materials and code for the workshop are available at:
 
-- [https://github.com/nareal/bplim_workshop_2025](https://github.com/nareal/bplim_workshop_2025)
-- [https://github.com/reisportela/cp2hdfe](https://github.com/reisportela/cp2hdfe)
+- [https://github.com/nareal/bplim_workshop_2025](https://github.com/nareal/bplim_workshop_2025){target="_blank"}
+- [https://github.com/reisportela/cp2hdfe](https://github.com/reisportela/cp2hdfe){target="_blank"}
 
 :::{.callout-important}
 ## Disclaimer
