@@ -1,0 +1,15 @@
+{
+  "hash": "b6c1de8b471402114326316b84e1617e",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"R package\"\nformat: \n    html:\n      toc: true\n      toc-location: right\n      toc-depth: 3\n      number-sections: true\n---\n\n\nThe R package used to illustrate the advantages using compiled C++ code when parallelizing computations is available [here](apopt_0.1.0.tar.gz).\n\nYou can install it directly from the tarball using the following command in R:\n\n\n::: {.cell}\n\n```{.r .cell-code}\ninstall.packages(\"apopt_0.1.0.tar.gz\", repos = NULL, type = \"source\")\n```\n\n::: {.cell-output .cell-output-stderr}\n\n```\nInstalling package into '/Users/nareal/Library/R/arm64/4.5/library'\n(as 'lib' is unspecified)\n```\n\n\n:::\n:::\n\n\nOnce installed, you can load the package and use the functions implemented in C++ as follows:\n\n\n::: {.cell}\n\n```{.r .cell-code}\nlibrary(apopt)\n# Example usage of the C++ implemented function\namerican_put_value <- ap_v3_rcpp(\n  S0 = 100,\n  K = 100,\n  r = 0.05,\n  q = 0.02,\n  tt = 1,\n  sigma = 0.2,\n  steps = 1000\n)\n\nprint(american_put_value)\n```\n\n::: {.cell-output .cell-output-stdout}\n\n```\n[1] 6.659759\n```\n\n\n:::\n:::\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

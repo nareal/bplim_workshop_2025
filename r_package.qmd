@@ -1,0 +1,36 @@
+---
+title: "R package"
+format: 
+    html:
+      toc: true
+      toc-location: right
+      toc-depth: 3
+      number-sections: true
+---
+
+
+The R package used to illustrate the advantages using compiled C++ code when parallelizing computations is available [here](apopt_0.1.0.tar.gz).
+
+You can install it directly from the tarball using the following command in R:
+
+```{r}
+install.packages("apopt_0.1.0.tar.gz", repos = NULL, type = "source")
+```
+
+Once installed, you can load the package and use the functions implemented in C++ as follows:
+
+```{r}
+library(apopt)
+# Example usage of the C++ implemented function
+american_put_value <- ap_v3_rcpp(
+  S0 = 100,
+  K = 100,
+  r = 0.05,
+  q = 0.02,
+  tt = 1,
+  sigma = 0.2,
+  steps = 1000
+)
+
+print(american_put_value)
+```

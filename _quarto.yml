@@ -2,7 +2,7 @@ project:
   type: website
   render:
     - "*.qmd"
-    - "!notebooks/*.qmd"
+    - "!notebooks/03-benchmark_server.qmd"
     - "!slides/*.qmd"
     
 website:
@@ -31,14 +31,15 @@ website:
         
         contents:
         - text: "Create option parameters - Test suite"
-          href: notebooks/01-create_option_parameters.html
-          target: _blank
+          href: notebooks/01-create_option_parameters.qmd
         - text: "Benchmarking different implementations"
-          href: notebooks/02-benchmark.html
-          target: _blank
+          href: notebooks/02-benchmark.qmd
       
       - text: "R, C++ and Julia code"
         href: code.qmd
+
+      - text: "R package"
+        href: r_package.qmd
 
 format:
   html:
